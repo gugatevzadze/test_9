@@ -10,26 +10,40 @@ import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
+import androidx.fragment.app.viewModels
 import com.example.test_9.databinding.FragmentMainBinding
 import com.example.test_9.presentation.base.BaseFragment
 import com.example.test_9.presentation.extension.showSnackBar
 import com.example.test_9.presentation.interfaces.OnChoosePictureButton
 import com.example.test_9.presentation.interfaces.OnTakePictureButton
 import com.example.test_9.presentation.screen.bottom_sheet.BottomSheetFragment
+import dagger.hilt.android.AndroidEntryPoint
 import java.io.ByteArrayOutputStream
 
-class MainFragment : BaseFragment<FragmentMainBinding>(FragmentMainBinding::inflate), OnChoosePictureButton,
+@AndroidEntryPoint
+class MainFragment : BaseFragment<FragmentMainBinding>(FragmentMainBinding::inflate),
+    OnChoosePictureButton,
     OnTakePictureButton {
 
+    private val viewModel: MainViewModel by viewModels()
 
     override fun setUp() {
     }
 
     override fun setClickListeners() {
         onAddImageButtonClicked()
+        onImageUploadButtonClicked()
     }
 
     override fun bindObservers() {
+    }
+
+    private fun onImageUploadButtonClicked() {
+        binding.btnUploadPhoto.setOnClickListener {
+            val bitmap = binding.ivPhoto.drawable.toBitmap()
+            uploadImage(bitmap)
+        }
     }
 
     private fun onAddImageButtonClicked() {
@@ -57,29 +71,34 @@ class MainFragment : BaseFragment<FragmentMainBinding>(FragmentMainBinding::infl
     }
 
     //taking picture functionality
-    private val takePictureLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val data: Intent? = result.data
-            val imageBitmap = data?.extras?.get("data") as Bitmap?
-            imageBitmap?.let {
-                val compressedBitmap = compressBitmap(it)
-                binding.ivPhoto.setImageBitmap(compressedBitmap)
+    private val takePictureLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                val data: Intent? = result.data
+                val imageBitmap = data?.extras?.get("data") as Bitmap?
+                imageBitmap?.let {
+                    val compressedBitmap = compressBitmap(it)
+                    binding.ivPhoto.setImageBitmap(compressedBitmap)
+                }
+            } else {
+                binding.root.showSnackBar("Failed to capture image")
             }
-        } else {
-            binding.root.showSnackBar("Failed to capture image")
         }
-    }
 
-    private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
-        if (isGranted) {
-            openCamera()
-        } else {
-            binding.root.showSnackBar("Camera permission denied")
+    private val requestPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
+            if (isGranted) {
+                openCamera()
+            } else {
+                binding.root.showSnackBar("Camera permission denied")
+            }
         }
-    }
 
     private fun checkCameraPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        return ContextCompat.checkSelfPermission(
+            requireContext(),
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun openCamera() {
@@ -88,29 +107,35 @@ class MainFragment : BaseFragment<FragmentMainBinding>(FragmentMainBinding::infl
     }
 
     //choose picture functionality
-    private val choosePictureLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val imageUri = result.data?.data
-            imageUri?.let {
-                val imageBitmap = MediaStore.Images.Media.getBitmap(requireActivity().contentResolver, it)
-                val compressedBitmap = compressBitmap(imageBitmap)
-                binding.ivPhoto.setImageBitmap(compressedBitmap)
+    private val choosePictureLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                val imageUri = result.data?.data
+                imageUri?.let {
+                    val imageBitmap =
+                        MediaStore.Images.Media.getBitmap(requireActivity().contentResolver, it)
+                    val compressedBitmap = compressBitmap(imageBitmap)
+                    binding.ivPhoto.setImageBitmap(compressedBitmap)
+                }
+            } else {
+                binding.root.showSnackBar("Failed to choose image")
             }
-        } else {
-            binding.root.showSnackBar("Failed to choose image")
         }
-    }
 
-    private val requestReadStoragePermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
-        if (isGranted) {
-            openGallery()
-        } else {
-            binding.root.showSnackBar("Read storage permission denied")
+    private val requestReadStoragePermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
+            if (isGranted) {
+                openGallery()
+            } else {
+                binding.root.showSnackBar("Read storage permission denied")
+            }
         }
-    }
 
     private fun checkReadStoragePermission(): Boolean {
-        return ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        return ContextCompat.checkSelfPermission(
+            requireContext(),
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        ) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun openGallery() {
@@ -124,5 +149,9 @@ class MainFragment : BaseFragment<FragmentMainBinding>(FragmentMainBinding::infl
         bitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream)
         val byteArray = stream.toByteArray()
         return BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
+    }
+    //firebase upload
+    private fun uploadImage(bitmap: Bitmap) {
+        viewModel.uploadImage(bitmap)
     }
 }
